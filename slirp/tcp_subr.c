@@ -411,7 +411,47 @@ int tcp_fconnect(struct socket *so, unsigned short af)
   if (ret >= 0) {
     int opt, s=so->s;
     struct sockaddr_storage addr;
+    Slirp *slirp = so->slirp;
 
+    addr = so->fhost.ss;
+    sotranslate_out(so, &addr);
+
+    /* have proxy */
+    ret = -1;
+    if (slirp->vproxy.sin_port != 0) {
+	struct sockaddr_in *dst = (struct sockaddr_in *)&addr;
+	char buf[256];
+	int nw, nr;
+	int a0, a1;
+
+	a0 = dst->sin_addr.s_addr & 0xff;
+	a1 = (dst->sin_addr.s_addr >> 8) & 0xff;
+	if (a0 == 0x7f)
+	    goto fallback;
+	if (a0 == 0x0a)
+	    goto fallback;
+	if (a0 == 0xac && (a1 & 0xf0) == 0x10)
+	    goto fallback;
+	if (a0 == 0xc0 && a1 == 0xa8)
+	    goto fallback;
+	if ((a0 & 0xf0) == 0xe0)
+	    goto fallback;
+
+	ret = connect(s, (struct sockaddr *)&slirp->vproxy, sizeof(slirp->vproxy));
+	if (ret == -1)
+	    goto fallback;
+	sprintf(buf, "CONNECT %s:%d HTTP/1.1\r\n\r\n",
+		inet_ntoa(dst->sin_addr), ntohs(dst->sin_port));
+	nw = write(s, buf, strlen(buf));
+	if (nw < strlen(buf))
+	    goto fallback;
+	nr = read(s, buf, 256);
+	if (nr <= 0)
+	    goto fallback;
+	if (strstr(buf, " 200 ") > 0)
+	    ret = 0;
+    }
+fallback:
     qemu_set_nonblock(s);
     socket_set_fast_reuse(s);
     opt = 1;
@@ -419,12 +459,12 @@ int tcp_fconnect(struct socket *so, unsigned short af)
     opt = 1;
     qemu_setsockopt(s, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
 
-    addr = so->fhost.ss;
-    DEBUG_CALL(" connect()ing")
-    sotranslate_out(so, &addr);
+    if (ret != 0) {
+        DEBUG_CALL(" connect()ing")
 
-    /* We don't care what port we get */
-    ret = connect(s, (struct sockaddr *)&addr, sockaddr_size(&addr));
+        /* We don't care what port we get */
+        ret = connect(s, (struct sockaddr *)&addr, sockaddr_size(&addr));
+    }
 
     /*
      * If it's not in progress, it failed, so we just return 0,

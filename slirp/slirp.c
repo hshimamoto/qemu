@@ -328,7 +328,7 @@ Slirp *slirp_init(int restricted, bool in_enabled, struct in_addr vnetwork,
         translate_dnssearch(slirp, vdnssearch);
     }
 
-    memset(&slirp->vproxy, 0, sizeof(slirp->vproxy))
+    memset(&slirp->vproxy, 0, sizeof(slirp->vproxy));
     if (vproxy_port > 0) {
         slirp->vproxy.sin_family = AF_INET;
         slirp->vproxy.sin_addr.s_addr = vproxy_addr.s_addr;
