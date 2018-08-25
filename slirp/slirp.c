@@ -286,7 +286,9 @@ Slirp *slirp_init(int restricted, bool in_enabled, struct in_addr vnetwork,
                   const char *tftp_path, const char *bootfile,
                   struct in_addr vdhcp_start, struct in_addr vnameserver,
                   struct in6_addr vnameserver6, const char **vdnssearch,
-                  const char *vdomainname, void *opaque)
+                  const char *vdomainname,
+		  struct in_addr vproxy_addr, int vproxy_port,
+                  void *opaque)
 {
     Slirp *slirp = g_malloc0(sizeof(Slirp));
 
@@ -324,6 +326,13 @@ Slirp *slirp_init(int restricted, bool in_enabled, struct in_addr vnetwork,
 
     if (vdnssearch) {
         translate_dnssearch(slirp, vdnssearch);
+    }
+
+    memset(&slirp->vproxy, 0, sizeof(slirp->vproxy))
+    if (vproxy_port > 0) {
+        slirp->vproxy.sin_family = AF_INET;
+        slirp->vproxy.sin_addr.s_addr = vproxy_addr.s_addr;
+        slirp->vproxy.sin_port = htons(vproxy_port);
     }
 
     slirp->opaque = opaque;

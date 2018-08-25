@@ -157,6 +157,7 @@ static int net_slirp_init(NetClientState *peer, const char *model,
                           const char *bootfile, const char *vdhcp_start,
                           const char *vnameserver, const char *vnameserver6,
                           const char *smb_export, const char *vsmbserver,
+                          const char *vproxy_addr, int vproxy_port,
                           const char **dnssearch, const char *vdomainname,
                           Error **errp)
 {
@@ -172,6 +173,7 @@ static int net_slirp_init(NetClientState *peer, const char *model,
 #ifndef _WIN32
     struct in_addr smbsrv = { .s_addr = 0 };
 #endif
+    struct in_addr proxy  = { .s_addr = 0 };
     NetClientState *nc;
     SlirpState *s;
     char buf[20];
@@ -293,6 +295,12 @@ static int net_slirp_init(NetClientState *peer, const char *model,
     }
 #endif
 
+    if (vproxy_addr && !inet_aton(vproxy_addr, &proxy) &&
+	(0 < vproxy_addr && vproxy_port < 65536)) {
+        error_setg(errp, "Failed to parse proxy address and port");
+        return -1;
+    }
+
 #if defined(_WIN32) && (_WIN32_WINNT < 0x0600)
     /* No inet_pton helper before Vista... */
     if (vprefix6) {
@@ -377,7 +385,8 @@ static int net_slirp_init(NetClientState *peer, const char *model,
     s->slirp = slirp_init(restricted, ipv4, net, mask, host,
                           ipv6, ip6_prefix, vprefix6_len, ip6_host,
                           vhostname, tftp_export, bootfile, dhcp,
-                          dns, ip6_dns, dnssearch, vdomainname, s);
+                          dns, ip6_dns, dnssearch, vdomainname,
+			  proxy, vproxy_port, s);
     QTAILQ_INSERT_TAIL(&slirp_stacks, s, entry);
 
     for (config = slirp_configs; config; config = config->next) {
@@ -936,6 +945,8 @@ int net_init_slirp(const Netdev *netdev, const char *name,
     const NetdevUserOptions *user;
     const char **dnssearch;
     bool ipv4 = true, ipv6 = true;
+    char *proxy_addr = NULL;
+    int proxy_port = 0;
 
     assert(netdev->type == NET_CLIENT_DRIVER_USER);
     user = &netdev->u.user;
@@ -957,6 +968,20 @@ int net_init_slirp(const Netdev *netdev, const char *name,
 
     /* all optional fields are initialized to "all bits zero" */
 
+    if (user->has_proxy) {
+	char *p0 = strchr(user->proxy, ':');
+
+	if (p0 == NULL)
+	    proxy_port = 8080; // default
+	else
+	    proxy_port = atoi(p0 + 1);
+	proxy_addr = g_malloc(256);
+	pstrcpy(proxy_addr, 256, user->proxy);
+	p0 = strchr(proxy_addr, ':');
+	if (p0)
+	    *p0 = '\0';
+    }
+
     net_init_slirp_configs(user->hostfwd, SLIRP_CFG_HOSTFWD);
     net_init_slirp_configs(user->guestfwd, 0);
 
@@ -966,7 +991,9 @@ int net_init_slirp(const Netdev *netdev, const char *name,
                          user->ipv6_host, user->hostname, user->tftp,
                          user->bootfile, user->dhcpstart,
                          user->dns, user->ipv6_dns, user->smb,
-                         user->smbserver, dnssearch, user->domainname, errp);
+                         user->smbserver,
+			 proxy_addr, proxy_port,
+			 dnssearch, user->domainname, errp);
 
     while (slirp_configs) {
         config = slirp_configs;

@@ -168,6 +168,8 @@ struct Slirp {
     struct in_addr vnameserver_addr;
     struct in6_addr vnameserver_addr6;
 
+    struct sockaddr_in vproxy;
+
     struct in_addr client_ipaddr;
     char client_hostname[33];
 

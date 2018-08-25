@@ -169,6 +169,8 @@
 #
 # @smbserver: IP address of the built-in SMB server
 #
+# @proxy: IP address and port of proxy server
+#
 # @hostfwd: redirect incoming TCP or UDP host connections to guest
 #           endpoints
 #
@@ -197,6 +199,7 @@
     '*ipv6-dns':         'str',
     '*smb':       'str',
     '*smbserver': 'str',
+    '*proxy': 'str',
     '*hostfwd':   ['String'],
     '*guestfwd':  ['String'] } }
 
